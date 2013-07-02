@@ -102,6 +102,9 @@
                     withContext:(NSManagedObjectContext *)context
                           error:(NSError *__autoreleasing *)error;
 
+- (NSArray *)populateObject:(NSManagedObject *)insertedObject withRepresentationOfAttributesAndRelationships:(NSDictionary *)representation fromResponse:(NSHTTPURLResponse *)response withContext:(NSManagedObjectContext *)context;
+
+
 @end
 
 #pragma mark -
@@ -276,6 +279,7 @@
 - (BOOL)shouldFetchRemoteValuesForRelationship:(NSRelationshipDescription *)relationship
                                forObjectWithID:(NSManagedObjectID *)objectID
                         inManagedObjectContext:(NSManagedObjectContext *)context;
+
 
 @end
 
