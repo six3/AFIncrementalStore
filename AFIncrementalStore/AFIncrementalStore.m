@@ -70,7 +70,7 @@ static inline void AFSaveManagedObjectContextOrThrowInternalConsistencyException
         if (!error) {
             *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSCoreDataError userInfo:nil];
         }
-        
+        NSLog(@"ERror saving %@",*error);
         @throw [NSException exceptionWithName:NSInternalInconsistencyException reason:[*error localizedFailureReason] userInfo:[NSDictionary dictionaryWithObject:*error forKey:NSUnderlyingErrorKey]];
     }
 }
