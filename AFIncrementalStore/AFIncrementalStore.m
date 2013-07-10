@@ -587,13 +587,19 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
                 continue;
             }
             AFHTTPRequestOperation *operation = [self.HTTPClient HTTPRequestOperationWithRequest:request success:^(AFHTTPRequestOperation *operation, id responseObject) {
+                [context performBlockAndWait:^{
                 id representationOrArrayOfRepresentations = [self.HTTPClient representationOrArrayOfRepresentationsOfEntity:[insertedObject entity]  fromResponseObject:responseObject];
                 if ([representationOrArrayOfRepresentations isKindOfClass:[NSDictionary class]]) {
                     NSString *resourceIdentifier = [self.HTTPClient resourceIdentifierForRepresentation:representationOrArrayOfRepresentations ofEntity:[insertedObject entity] fromResponse:operation.response];
                     insertedObject.af_resourceIdentifier = resourceIdentifier;
                     [self insertOrUpdateObjectsFromRepresentations:representationOrArrayOfRepresentations ofObject:insertedObject fromResponse:operation.response withContext:context error:nil completionBlock:^(NSManagedObject *managedObject, NSManagedObject *backingObject) {
                         [backingContext performBlockAndWait:^{
-                            [backingContext save:nil];
+                            NSError *error = nil;
+
+                            [backingContext save:&error];
+                            if (error) {
+                                NSLog(@"OOPs %@",error);
+                            }
                         }];
                         [insertedObject willChangeValueForKey:@"objectID"];
                         [context obtainPermanentIDsForObjects:[NSArray arrayWithObject:insertedObject] error:nil];
@@ -601,8 +607,9 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
                         [context refreshObject:insertedObject mergeChanges:NO];
                     } ];
                 }
+                }];
             } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
-                NSLog(@"Insert Error: %@", error);
+                NSLog(@"Insert Error: %@", error);                
             }];
             
             [mutableOperations addObject:operation];
@@ -653,9 +660,16 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
             NSURLRequest *request = [self.HTTPClient requestForDeletedObject:deletedObject];
             if (!request) {
                 [backingContext performBlockAndWait:^{
-                    NSManagedObject *backingObject = [backingContext existingObjectWithID:backingObjectID error:nil];
-                    [backingContext deleteObject:backingObject];
-                    [backingContext save:nil];
+                    if (backingObjectID) {
+                        NSManagedObject *backingObject = [backingContext existingObjectWithID:backingObjectID error:nil];
+                        
+                        [backingContext deleteObject:backingObject];
+                        NSError *error = nil;
+                        [backingContext save:&error];
+                        if (error) {
+                            NSLog(@"OOps %@",error);
+                        }
+                    }
                 }];
                 continue;
             }
@@ -821,7 +835,7 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
     }];
     
     NSDictionary *attributeValues = [results lastObject] ?: [NSDictionary dictionary];
-    NSIncrementalStoreNode *node = [[NSIncrementalStoreNode alloc] initWithObjectID:objectID withValues:attributeValues version:1];
+    NSIncrementalStoreNode *node = [[NSIncrementalStoreNode alloc] initWithObjectID:objectID withValues:attributeValues version:CFAbsoluteTimeGetCurrent()];
     
     if ([self.HTTPClient respondsToSelector:@selector(shouldFetchRemoteAttributeValuesForObjectWithID:inManagedObjectContext:)] && [self.HTTPClient shouldFetchRemoteAttributeValuesForObjectWithID:objectID inManagedObjectContext:context]) {
         if (attributeValues) {
