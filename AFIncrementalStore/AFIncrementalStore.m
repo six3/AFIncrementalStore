@@ -694,12 +694,9 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
                 [backingContext performBlockAndWait:^{
                     if (backingObjectID) {
                         NSManagedObject *backingObject = [backingContext existingObjectWithID:backingObjectID error:nil];
-                        
-                        [backingContext deleteObject:backingObject];
-                        NSError *error = nil;
-                        [backingContext save:&error];
-                        if (error) {
-                            NSLog(@"OOps %@",error);
+                        if (backingObject) {
+                            [backingContext deleteObject:backingObject];
+                        [backingContext save:nil];
                         }
                     }
                 }];
