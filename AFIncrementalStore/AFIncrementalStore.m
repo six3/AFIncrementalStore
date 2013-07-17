@@ -221,13 +221,13 @@ static inline void AFSaveManagedObjectContextOrThrowInternalConsistencyException
     if (!resourceIdentifier) {
         return nil;
     }
-
+    
     NSManagedObjectID *objectID = [self objectIDForEntity:entity withResourceIdentifier:resourceIdentifier];
     __block NSManagedObjectID *backingObjectID = [_backingObjectIDByObjectID objectForKey:objectID];
     if (backingObjectID) {
         return backingObjectID;
     }
-
+    
     NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] initWithEntityName:[entity name]];
     fetchRequest.resultType = NSManagedObjectIDResultType;
     fetchRequest.fetchLimit = 1;
@@ -243,7 +243,7 @@ static inline void AFSaveManagedObjectContextOrThrowInternalConsistencyException
         NSLog(@"Error: %@", error);
         return nil;
     }
-
+    
     if (backingObjectID) {
         [_backingObjectIDByObjectID setObject:backingObjectID forKey:objectID];
     }
@@ -308,78 +308,78 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
                                     fromResponse:(NSHTTPURLResponse *)response
                                      withContext:(NSManagedObjectContext *)context
                                            error:(NSError *__autoreleasing *)error
-                                 completionBlock:(void (^)(NSManagedObject *managedObject, NSManagedObject *backingObject))completionBlock
+                                 completionBlock:(void (^)(NSArray *managedObjects, NSArray *backingObjects))completionBlock
 {
     
     NSManagedObjectContext *backingContext = [self backingManagedObjectContext];
-
-        NSString *resourceIdentifier = [self.HTTPClient resourceIdentifierForRepresentation:representation ofEntity:managedObject.entity fromResponse:response];
-        NSString *lastModified = [[response allHeaderFields] valueForKey:@"Last-Modified"];
-
-        NSDictionary *attributes = [self.HTTPClient attributesForRepresentation:representation ofEntity:managedObject.entity fromResponse:response];
-        [managedObject setValuesForKeysWithDictionary:attributes];
-        
-        NSManagedObjectID *backingObjectID = [self objectIDForBackingObjectForEntity:managedObject.entity withResourceIdentifier:resourceIdentifier];
-        __block NSManagedObject *backingObject = nil;
-        [backingContext performBlockAndWait:^{
-            if (backingObjectID) {
-                backingObject = [backingContext existingObjectWithID:backingObjectID error:nil];
-            } else {
-                backingObject = [NSEntityDescription insertNewObjectForEntityForName:managedObject.entity.name inManagedObjectContext:backingContext];
-                [backingObject.managedObjectContext obtainPermanentIDsForObjects:[NSArray arrayWithObject:backingObject] error:nil];
-            }
-        }];
-        [backingObject setValue:resourceIdentifier forKey:kAFIncrementalStoreResourceIdentifierAttributeName];
-        [backingObject setValue:lastModified forKey:kAFIncrementalStoreLastModifiedAttributeName];
+    NSMutableArray *mutableManagedObjects = [NSMutableArray array];
+    NSMutableArray *mutableBackingObjects = [NSMutableArray array];
+    
+    NSString *resourceIdentifier = [self.HTTPClient resourceIdentifierForRepresentation:representation ofEntity:managedObject.entity fromResponse:response];
+    NSString *lastModified = [[response allHeaderFields] valueForKey:@"Last-Modified"];
+    
+    NSDictionary *attributes = [self.HTTPClient attributesForRepresentation:representation ofEntity:managedObject.entity fromResponse:response];
+    [managedObject setValuesForKeysWithDictionary:attributes];
+    
+    NSManagedObjectID *backingObjectID = [self objectIDForBackingObjectForEntity:managedObject.entity withResourceIdentifier:resourceIdentifier];
+    __block NSManagedObject *backingObject = nil;
+    [backingContext performBlockAndWait:^{
+        if (backingObjectID) {
+            backingObject = [backingContext existingObjectWithID:backingObjectID error:nil];
+        } else {
+            backingObject = [NSEntityDescription insertNewObjectForEntityForName:managedObject.entity.name inManagedObjectContext:backingContext];
+            [backingObject.managedObjectContext obtainPermanentIDsForObjects:[NSArray arrayWithObject:backingObject] error:nil];
+        }
+    }];
+    [backingObject setValue:resourceIdentifier forKey:kAFIncrementalStoreResourceIdentifierAttributeName];
+    [backingObject setValue:lastModified forKey:kAFIncrementalStoreLastModifiedAttributeName];
     for (NSString *key in managedObject.entity.attributesByName) {
         [backingObject setValue:[managedObject valueForKey:key] forKey:key];
     }
-
-        
-//        if (!backingObjectID) {
-//            [context insertObject:managedObject];
-//        }
     
-        NSDictionary *relationshipRepresentations = [self.HTTPClient representationsForRelationshipsFromRepresentation:representation ofEntity:managedObject.entity fromResponse:response];
-        for (NSString *relationshipName in relationshipRepresentations) {
-            NSRelationshipDescription *relationship = [[managedObject.entity relationshipsByName] valueForKey:relationshipName];
-            id relationshipRepresentation = [relationshipRepresentations objectForKey:relationshipName];
-            if (!relationship || (relationship.isOptional && (!relationshipRepresentation || [relationshipRepresentation isEqual:[NSNull null]]))) {
-                continue;
-            }
-            
-            if (!relationshipRepresentation || [relationshipRepresentation isEqual:[NSNull null]] || [relationshipRepresentation count] == 0) {
-                [managedObject setValue:nil forKey:relationshipName];
-                [backingObject setValue:nil forKey:relationshipName];
-                continue;
-            }
-            
-            [self insertOrUpdateObjectsFromRepresentations:relationshipRepresentation ofEntity:relationship.destinationEntity fromResponse:response withContext:context error:error completionBlock:^(NSArray *managedObjects, NSArray *backingObjects) {
-                if ([relationship isToMany]) {
-                    if ([relationship isOrdered]) {
-                        [managedObject setValue:[NSOrderedSet orderedSetWithArray:managedObjects] forKey:relationship.name];
-                        [backingObject setValue:[NSOrderedSet orderedSetWithArray:backingObjects] forKey:relationship.name];
-                    } else {
-                        [managedObject setValue:[NSSet setWithArray:managedObjects] forKey:relationship.name];
-                        [backingObject setValue:[NSSet setWithArray:backingObjects] forKey:relationship.name];
-                    }
-                } else {
-                    [managedObject setValue:[managedObjects lastObject] forKey:relationship.name];
-                    [backingObject setValue:[backingObjects lastObject] forKey:relationship.name];
-                }
-            }];
+    NSDictionary *relationshipRepresentations = [self.HTTPClient representationsForRelationshipsFromRepresentation:representation ofEntity:managedObject.entity fromResponse:response];
+    for (NSString *relationshipName in relationshipRepresentations) {
+        NSRelationshipDescription *relationship = [[managedObject.entity relationshipsByName] valueForKey:relationshipName];
+        id relationshipRepresentation = [relationshipRepresentations objectForKey:relationshipName];
+        if (!relationship || (relationship.isOptional && (!relationshipRepresentation || [relationshipRepresentation isEqual:[NSNull null]]))) {
+            continue;
         }
         
+        if (!relationshipRepresentation || [relationshipRepresentation isEqual:[NSNull null]] || [relationshipRepresentation count] == 0) {
+            [managedObject setValue:nil forKey:relationshipName];
+            [backingObject setValue:nil forKey:relationshipName];
+            continue;
+        }
+        
+        [self insertOrUpdateObjectsFromRepresentations:relationshipRepresentation ofEntity:relationship.destinationEntity fromResponse:response withContext:context error:error completionBlock:^(NSArray *managedObjects, NSArray *backingObjects) {
+            if ([relationship isToMany]) {
+                if ([relationship isOrdered]) {
+                    [managedObject setValue:[NSOrderedSet orderedSetWithArray:managedObjects] forKey:relationship.name];
+                    [backingObject setValue:[NSOrderedSet orderedSetWithArray:backingObjects] forKey:relationship.name];
+                } else {
+                    [managedObject setValue:[NSSet setWithArray:managedObjects] forKey:relationship.name];
+                    [backingObject setValue:[NSSet setWithArray:backingObjects] forKey:relationship.name];
+                }
+            } else {
+                [managedObject setValue:[managedObjects lastObject] forKey:relationship.name];
+                [backingObject setValue:[backingObjects lastObject] forKey:relationship.name];
+            }
+            [mutableManagedObjects addObjectsFromArray:managedObjects];
+            [mutableBackingObjects addObjectsFromArray:backingObjects];
+        }];
+    }
     
+    [mutableManagedObjects addObject:managedObject];
+    [mutableBackingObjects addObject:backingObject];
     if (completionBlock) {
-        completionBlock(managedObject, backingObject);
+        completionBlock(mutableManagedObjects, mutableBackingObjects);
     }
     
     return YES;
 }
 
 
- - (BOOL)insertOrUpdateObjectsFromRepresentations:(id)representationOrArrayOfRepresentations
+- (BOOL)insertOrUpdateObjectsFromRepresentations:(id)representationOrArrayOfRepresentations
                                         ofEntity:(NSEntityDescription *)entity
                                     fromResponse:(NSHTTPURLResponse *)response
                                      withContext:(NSManagedObjectContext *)context
@@ -430,6 +430,9 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
         [backingContext performBlockAndWait:^{
             if (backingObjectID) {
                 backingObject = [backingContext existingObjectWithID:backingObjectID error:nil];
+                if ([backingObjectID isTemporaryID]) {
+                    [backingObject.managedObjectContext obtainPermanentIDsForObjects:@[backingObject] error:nil];
+                }
             } else {
                 backingObject = [NSEntityDescription insertNewObjectForEntityForName:entity.name inManagedObjectContext:backingContext];
                 [backingObject.managedObjectContext obtainPermanentIDsForObjects:[NSArray arrayWithObject:backingObject] error:nil];
@@ -581,6 +584,7 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
             NSURLRequest *request = [self.HTTPClient requestForInsertedObject:insertedObject];
             if (!request) {
                 [backingContext performBlockAndWait:^{
+                    
                     CFUUIDRef UUID = CFUUIDCreate(NULL);
                     NSString *resourceIdentifier = (__bridge_transfer NSString *)CFUUIDCreateString(NULL, UUID);
                     CFRelease(UUID);
@@ -599,35 +603,34 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
             }
             AFHTTPRequestOperation *operation = [self.HTTPClient HTTPRequestOperationWithRequest:request success:^(AFHTTPRequestOperation *operation, id responseObject) {
                 [context performBlockAndWait:^{
-                id representationOrArrayOfRepresentations = [self.HTTPClient representationOrArrayOfRepresentationsOfEntity:[insertedObject entity]  fromResponseObject:responseObject];
-                if ([representationOrArrayOfRepresentations isKindOfClass:[NSDictionary class]]) {
-                    NSString *resourceIdentifier = [self.HTTPClient resourceIdentifierForRepresentation:representationOrArrayOfRepresentations ofEntity:[insertedObject entity] fromResponse:operation.response];
-                    insertedObject.af_resourceIdentifier = resourceIdentifier;
-                    [self insertOrUpdateObjectsFromRepresentations:representationOrArrayOfRepresentations ofObject:insertedObject fromResponse:operation.response withContext:context error:nil completionBlock:^(NSManagedObject *managedObject, NSManagedObject *backingObject) {
-                        [backingContext performBlockAndWait:^{
-                            NSError *error = nil;
-
-                            [backingContext save:&error];
-                            if (error) {
-                                NSLog(@"OOPs %@",error);
+                    id representationOrArrayOfRepresentations = [self.HTTPClient representationOrArrayOfRepresentationsOfEntity:[insertedObject entity]  fromResponseObject:responseObject];
+                    if ([representationOrArrayOfRepresentations isKindOfClass:[NSDictionary class]]) {
+                        NSString *resourceIdentifier = [self.HTTPClient resourceIdentifierForRepresentation:representationOrArrayOfRepresentations ofEntity:[insertedObject entity] fromResponse:operation.response];
+                        insertedObject.af_resourceIdentifier = resourceIdentifier;
+                        [self insertOrUpdateObjectsFromRepresentations:representationOrArrayOfRepresentations ofObject:insertedObject fromResponse:operation.response withContext:context error:nil completionBlock:^(NSArray *managedObjects, NSArray *backingObjects) {
+                            [backingContext performBlockAndWait:^{
+                                [backingContext save:nil];
+                            }];
+                            for (NSManagedObject *object in managedObjects) {
+                                [object willChangeValueForKey:@"objectID"];
+                                [context obtainPermanentIDsForObjects:[NSArray arrayWithObject:object] error:nil];
+                                [object didChangeValueForKey:@"objectID"];
+                                [context refreshObject:object mergeChanges:NO];
+                                
                             }
-                        }];
-                        [insertedObject willChangeValueForKey:@"objectID"];
-                        [context obtainPermanentIDsForObjects:[NSArray arrayWithObject:insertedObject] error:nil];
-                        [insertedObject didChangeValueForKey:@"objectID"];
-                        [context refreshObject:insertedObject mergeChanges:NO];
-                    } ];
-                }
+                            
+                        } ];
+                    }
                 }];
             } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
-				 NSLog(@"Insert Error: %@", error);
+                NSLog(@"Insert Error: %@", error);
 				
 				// Reset destination objects to prevent dangling relationships
 				for (NSRelationshipDescription *relationship in [insertedObject.entity.relationshipsByName allValues]) {
 					if (!relationship.inverseRelationship) {
 						continue;
 					}
-
+                    
                     id <NSFastEnumeration> destinationObjects = nil;
 					if ([relationship isToMany]) {
 						destinationObjects = [insertedObject valueForKey:relationship.name];
@@ -673,7 +676,7 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
                         [self updateBackingObject:backingObject withAttributeAndRelationshipValuesFromManagedObject:updatedObject];
                         [backingContext save:nil];
                     }];
-
+                    
                     [context refreshObject:updatedObject mergeChanges:NO];
                 }
             } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
@@ -696,7 +699,7 @@ withAttributeAndRelationshipValuesFromManagedObject:(NSManagedObject *)managedOb
                         NSManagedObject *backingObject = [backingContext existingObjectWithID:backingObjectID error:nil];
                         if (backingObject) {
                             [backingContext deleteObject:backingObject];
-                        [backingContext save:nil];
+                            [backingContext save:nil];
                         }
                     }
                 }];
