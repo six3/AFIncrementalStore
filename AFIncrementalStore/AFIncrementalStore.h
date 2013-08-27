@@ -102,7 +102,7 @@
                     withContext:(NSManagedObjectContext *)context
                           error:(NSError *__autoreleasing *)error;
 
-- (NSArray *)populateObject:(NSManagedObject *)insertedObject withRepresentationOfAttributesAndRelationships:(NSDictionary *)representation fromResponse:(NSHTTPURLResponse *)response withContext:(NSManagedObjectContext *)context;
+- (NSArray *)populateObject:(NSManagedObject *)insertedObject withRepresentationsOfAttributesAndRelationship:(NSDictionary *)representation  fromResponse:(NSHTTPURLResponse *)response withContext:(NSManagedObjectContext *)context;
 
 
 @end
